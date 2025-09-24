@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Adventskalender 2025</title>
+  <style>
+    :root {
+      --bg: #f8f9fa;        /* lys bakgrunn */
+      --card: #ffffff;      /* hvite kort */
+      --accent: #c1121f;    /* dyp jule-rød */
+      --accent-2: #e63946;  /* lysere rød */
+      --muted: #6c757d;     /* grå tekst */
+      --ok: #198754;        /* grønn for riktig */
+      --warn: #dc3545;      /* rød for feil */
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg);
+      color: #212529;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100svh;
+    }
+    header { padding: 1.5rem 1rem 0.75rem; text-align: center; }
+    header h1 { margin: 0; font-size: clamp(1.8rem, 2.8vw + .8rem, 2.8rem); letter-spacing: .6px; color: var(--accent); }
+    header .sub { color: var(--muted); font-size: 1.05rem; }
+    .scoreline { margin-top:.35rem; font-weight:700; color: var(--ok); font-size:1.1rem; }
+
+    main { width: min(1200px, 94vw); margin: 1.5rem auto 2.5rem; }
+
+    .grid { display: grid; grid-template-columns: repeat( auto-fill, minmax(150px, 1fr) ); gap: 1.2rem; }
+
+    .door { position: relative; background: var(--card); border: 2px solid #dee2e6; border-radius: 16px; padding: 1.25rem; min-height: 140px; display: grid; place-items: center; text-decoration: none; color: inherit; isolation: isolate; box-shadow: 0 4px 12px rgba(0,0,0,.08); transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; overflow: hidden; }
+    .door:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,.12); border-color: var(--accent); }
+    .door:active { transform: translateY(0); }
+
+    .door .num { font-weight: 800; font-size: 3rem; letter-spacing: .6px; color: var(--accent); }
+    .door.locked .num { color: #adb5bd; }
+
+    .door.done { background: #f0fff4; border-color: var(--ok); box-shadow: 0 8px 16px rgba(25,135,84,.25); }
+    .door.done .num { display: none; }
+    .door .check { font-weight: 900; font-size: 3.2rem; color: var(--ok); }
+
+    .badge { position: absolute; top: .7rem; left: .7rem; font-size: .85rem; font-weight: 700; padding: .35rem .65rem; border-radius: 999px; background: #f8f9fa; border: 1px solid #dee2e6; color: var(--muted); }
+    .door.unlocked .badge { background: #fff5f5; color: var(--accent); border-color: var(--accent); }
+    .door.done .badge { background: #e6ffed; color: var(--ok); border-color: var(--ok); }
+
+    .ribbon { position: absolute; inset: 0; pointer-events: none; opacity: .6; background: repeating-linear-gradient(45deg, transparent 0 16px, rgba(0,0,0,.02) 16px 32px); }
+
+    .legend { display: flex; gap: .8rem; align-items: center; justify-content: center; color: var(--muted); font-size: 1.05rem; margin: 1rem 0 1.4rem; }
+    .dot { width: .9rem; height: .9rem; border-radius: 50%; display: inline-block; margin-right: .45rem; }
+    .dot.lock { background: #adb5bd; }
+    .dot.open { background: var(--ok); }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .card { background: var(--card); border: 1px solid #dee2e6; border-radius: 16px; padding: clamp(1.2rem, 2.2vw + .5rem, 1.8rem); box-shadow: 0 6px 12px rgba(0,0,0,.08); }
+
+    .task-head { display:flex; gap: .8rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .task-head h2 { margin: 0; font-size: clamp(1.3rem, 1.7vw + .9rem, 1.8rem); color: var(--accent); }
+    .task-body { margin-top: 1rem; line-height: 1.65; }
+    .task-body p { margin: .6rem 0; }
+
+    .controls { display:flex; gap:.6rem; flex-wrap:wrap; }
+    .btn { appearance: none; border: 0; cursor: pointer; font-weight: 700; letter-spacing:.25px; border-radius: 999px; padding: .6rem 1rem; background: #f8f9fa; color: #212529; border: 1px solid #dee2e6; transition: transform .1s ease, background .2s ease, border-color .2s ease; text-decoration: none; display:inline-flex; align-items:center; gap:.55rem; font-size:1rem; }
+    .btn:hover { background: #e9ecef; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.primary:hover { background: var(--accent-2); }
+
+    .answer-card { margin-top: 1.2rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 14px; padding: 1rem; }
+    .answer-row { display:flex; gap:.7rem; align-items: stretch; flex-wrap: wrap; }
+    .answer-row input[type="text"] { flex: 1 1 260px; padding: .65rem 1rem; font-size: 1.05rem; border-radius: 10px; border: 1px solid #ced4da; background: #fff; color: #212529; outline: none; }
+    .answer-row input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(193,18,31,.15); }
+    .status { font-size: 1rem; color: var(--muted); margin-top: .6rem; }
+    .status.ok { color: var(--ok); }
+    .status.no { color: var(--warn); }
+    .hint-card { margin-top: 1rem; background:#fff; border:1px dashed #ced4da; border-radius:12px; padding:1rem; }
+    .hint-card .hint-text { margin:.6rem 0 0; color:#212529; font-size:1rem; }
+    .hint-note { color: var(--accent); font-size:1rem; }
+
+    footer { color: var(--muted); text-align: center; font-size: .95rem; padding: 1.2rem 0 2.2rem; }
+    footer a { color: var(--accent); }
+
+    .snow { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+    .flake { position: absolute; top: -10px; font-size: 12px; opacity: .8; animation: fall linear infinite; color: var(--accent); }
+    @keyframes fall { to { transform: translateY(110vh) rotate(360deg); } }
+
+    .pts { position:absolute; right:.6rem; bottom:.6rem; font-size:.8rem; padding:.25rem .5rem; border-radius:999px; background:#f8f9fa; border:1px solid #dee2e6; color:#495057; }
+    .door.done .pts { background: #e6ffed; border-color: var(--ok); color: var(--ok); }
+
+    /* Media in tasks */
+    .task-media { margin-top: .8rem; display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    .task-media figure { margin: 0; background: #fff; border: 1px solid #dee2e6; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,.05); }
+    .task-media img { display:block; width:100%; height: 180px; object-fit: cover; }
+    .task-media figcaption { padding: .5rem .7rem; font-size: .95rem; color: #495057; }
+    .task-media a.media-link { display:block; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎄 Adventskalender 2025</h1>
+    <div class="sub" id="dateInfo">All days unlocked for editing (restore locking later)</div>
+    <div class="sub scoreline" id="scoreLine">Total points: 0</div>
+    <div class="legend"><span class="dot open"></span>Open</div>
+  </header>
+
+  <main>
+    <section id="home" class="view active">
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section id="task" class="view">
+      <div class="card">
+        <div class="task-head">
+          <h2 id="taskTitle">Day X</h2>
+          <div class="controls">
+            <a class="btn" href="#/">← All days</a>
+          </div>
+        </div>
+        <div class="task-body" id="taskBody"></div>
+        <div id="taskMedia" class="task-media"></div>
+
+        <div class="hint-card" id="hintCard" style="display:none;">
+          <div class="hint-note" id="hintNote">Revealing a hint halves the points for this day (rounded to nearest whole number).</div>
+          <button id="hintBtn" class="btn" style="margin-top:.6rem;">Reveal hint</button>
+          <div class="hint-text" id="hintText" style="display:none;"></div>
+        </div>
+
+        <div class="answer-card">
+          <div class="answer-row">
+            <input id="answerInput" type="text" placeholder="Type your answer" autocomplete="off" />
+            <button id="checkBtn" class="btn primary" aria-label="Check answer">Check</button>
+          </div>
+          <div id="answerStatus" class="status" aria-live="polite">Enter the answer and press Check (or hit Enter).</div>
+        </div>
+      </div>
+      <div style="display:flex; gap:.6rem; margin-top: 1rem; flex-wrap:wrap">
+        <a id="prevLink" class="btn" href="#/">← Previous</a>
+        <a id="nextLink" class="btn primary" href="#/">Next →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="todayText"></span>
+  </footer>
+
+  <div class="snow" aria-hidden="true" id="snow"></div>
+
+  <script>
+    const TZ = 'Europe/Oslo';
+
+    /*
+      IMAGES IN TASKS
+      ----------------
+      Add one or more images per task via the new optional `images` field:
+      images: [
+        { src: 'images/day1-1.jpg', alt: 'Nordlys over byen', caption: 'Ledetråd #1' },
+        { src: 'images/day1-2.jpg', alt: 'Ishavskatedralen', caption: 'Ledetråd #2' }
+      ]
+      Absolute URLs, relative paths, or data URLs are supported. Alt is recommended.
+    */
+
+    // 24 editable tasks — now with optional images[]
+    const TASKS = [
+      { day: 1,  title: 'Day 1: Hvilken norsk by?',  html: '<p>Hvilken norsk by skal vi frem til her?</p>',  answers: ['Tromsø'], points: 1, hint: 'Også kalt nordens Paris',
+        images: [
+          { src: 'https://images.unsplash.com/photo-1548588689-2fd7c9f1a6f8?q=80&w=1200&auto=format&fit=crop', alt: 'Nordlys over snødekt by', caption: 'Ledetråd: nordlys' },
+          { src: 'https://images.unsplash.com/photo-1542219550-37153d387c3b?q=80&w=1200&auto=format&fit=crop', alt: 'Moderne kirke i nord', caption: 'Ledetråd: ikonisk kirke' }
+        ]
+      },
+      { day: 2,  title: 'Day 2: Task',  html: '<p>Task 2 description</p>',  answers: ['example'], points: 2 },
+      { day: 3,  title: 'Day 3: Task',  html: '<p>Task 3 description</p>',  answers: ['example'], points: 3 },
+      { day: 4,  title: 'Day 4: Task',  html: '<p>Task 4 description</p>',  answers: ['example'], points: 4 },
+      { day: 5,  title: 'Day 5: Task',  html: '<p>Task 5 description</p>',  answers: ['example'], points: 5 },
+      { day: 6,  title: 'Day 6: Task',  html: '<p>Task 6 description</p>',  answers: ['example'], points: 6, hint: 'Også kalt nordens Paris' },
+      { day: 7,  title: 'Day 7: Task',  html: '<p>Task 7 description</p>',  answers: ['example'], points: 7 },
+      { day: 8,  title: 'Day 8: Task',  html: '<p>Task 8 description</p>',  answers: ['example'], points: 8 },
+      { day: 9,  title: 'Day 9: Task',  html: '<p>Task 9 description</p>',  answers: ['example'], points: 9 },
+      { day: 10, title: 'Day 10: Task', html: '<p>Task 10 description</p>', answers: ['example'], points: 10 },
+      { day: 11, title: 'Day 11: Task', html: '<p>Task 11 description</p>', answers: ['example'], points: 1 },
+      { day: 12, title: 'Day 12: Task', html: '<p>Task 12 description</p>', answers: ['example'], points: 2 },
+      { day: 13, title: 'Day 13: Task', html: '<p>Task 13 description</p>', answers: ['example'], points: 3 },
+      { day: 14, title: 'Day 14: Task', html: '<p>Task 14 description</p>', answers: ['example'], points: 4 },
+      { day: 15, title: 'Day 15: Task', html: '<p>Task 15 description</p>', answers: ['example'], points: 5 },
+      { day: 16, title: 'Day 16: Task', html: '<p>Task 16 description</p>', answers: ['example'], points: 6 },
+      { day: 17, title: 'Day 17: Task', html: '<p>Task 17 description</p>', answers: ['example'], points: 7 },
+      { day: 18, title: 'Day 18: Task', html: '<p>Task 18 description</p>', answers: ['example'], points: 8 },
+      { day: 19, title: 'Day 19: Task', html: '<p>Task 19 description</p>', answers: ['example'], points: 9 },
+      { day: 20, title: 'Day 20: Task', html: '<p>Task 20 description</p>', answers: ['example'], points: 10 },
+      { day: 21, title: 'Day 21: Task', html: '<p>Task 21 description</p>', answers: ['example'], points: 1 },
+      { day: 22, title: 'Day 22: Task', html: '<p>Task 22 description</p>', answers: ['example'], points: 2 },
+      { day: 23, title: 'Day 23: Task', html: '<p>Task 23 description</p>', answers: ['example'], points: 3 },
+      { day: 24, title: 'Day 24: Task', html: '<p>Task 24 description</p>', answers: ['example'], points: 4 }
+    ];
+
+    // Persistence (2025)
+    const LS_DONE = 'advent25_done';
+    const LS_ANSWERS = 'advent25_useranswers';
+    const LS_HINTS = 'advent25_hintsused';
+
+    const getDone = () => { try { return JSON.parse(localStorage.getItem(LS_DONE) || '{}'); } catch { return {}; } };
+    const setDone = (m) => localStorage.setItem(LS_DONE, JSON.stringify(m));
+    const getUserAnswers = () => { try { return JSON.parse(localStorage.getItem(LS_ANSWERS) || '{}'); } catch { return {}; } };
+    const setUserAnswers = (m) => localStorage.setItem(LS_ANSWERS, JSON.stringify(m));
+    const getHints = () => { try { return JSON.parse(localStorage.getItem(LS_HINTS) || '{}'); } catch { return {}; } };
+    const setHints = (m) => localStorage.setItem(LS_HINTS, JSON.stringify(m));
+
+    // Helpers
+    const norm = (s) => (s ?? '').toString().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const isCorrect = (day, value) => {
+      const t = TASKS.find(x => x.day === day);
+      if (!t) return false;
+      const expected = Array.isArray(t.answers) ? t.answers : [t.answers];
+      const v = norm(value);
+      return expected.some(ans => norm(ans) === v);
+    };
+    const getBasePoints = (day) => (TASKS.find(t => t.day === day)?.points ?? 0);
+    const isHintUsed = (day) => !!getHints()[day];
+    const getAwardPoints = (day) => isHintUsed(day) ? Math.round(getBasePoints(day) * 0.5) : getBasePoints(day);
+
+    // Elements
+    const grid = document.getElementById('grid');
+    const todayText = document.getElementById('todayText');
+    const dateInfo = document.getElementById('dateInfo');
+    const scoreLine = document.getElementById('scoreLine');
+    const mediaWrap = document.getElementById('taskMedia');
+
+    // Pre-calc max possible points for display
+    const MAX_POINTS = TASKS.reduce((s, t) => s + (t.points || 0), 0);
+
+    function computeTotalPoints() {
+      const done = getDone();
+      return Object.entries(done).reduce((sum, [k, v]) => v ? sum + getAwardPoints(Number(k)) : sum, 0);
+    }
+
+    function renderGrid() {
+      const done = getDone();
+      grid.innerHTML = '';
+      TASKS.forEach(t => {
+        const isDone = !!done[t.day];
+        const a = document.createElement('a');
+        a.href = `#/day/${t.day}`;
+        a.className = `door unlocked ${isDone ? 'done' : ''}`;
+        a.setAttribute('aria-label', `Day ${t.day} ${isDone ? 'completed' : 'open'}`);
+        a.innerHTML = `
+          <span class="badge">${isDone ? 'Done' : 'Open'}</span>
+          ${isDone ? '<span class="check">✓</span>' : `<span class="num">${t.day}</span>`}
+          <span class=\"pts\">${getAwardPoints(t.day)} pt${getAwardPoints(t.day) === 1 ? '' : 's'}<\/span>
+          <div class="ribbon"></div>
+        `;
+        grid.appendChild(a);
+      });
+
+      const total = computeTotalPoints();
+      scoreLine.textContent = `Total points: ${total} / ${MAX_POINTS}`;
+      todayText.textContent = 'Edit mode: all days are currently open. Green = answered correctly.';
+      dateInfo.textContent = 'All days unlocked for editing (Europe/Oslo).';
+    }
+
+    // Router & task view
+    const views = { home: document.getElementById('home'), task: document.getElementById('task') };
+    const taskTitle = document.getElementById('taskTitle');
+    const taskBody = document.getElementById('taskBody');
+    const answerInput = document.getElementById('answerInput');
+    const checkBtn = document.getElementById('checkBtn');
+    const answerStatus = document.getElementById('answerStatus');
+    const prevLink = document.getElementById('prevLink');
+    const nextLink = document.getElementById('nextLink');
+    const hintCard = document.getElementById('hintCard');
+    const hintBtn = document.getElementById('hintBtn');
+    const hintText = document.getElementById('hintText');
+    const hintNote = document.getElementById('hintNote');
+
+    function show(view) {
+      Object.values(views).forEach(v => v.classList.remove('active'));
+      views[view].classList.add('active');
+      if (view === 'home') document.title = 'Advent Calendar 25';
+    }
+
+    function route() {
+      const hash = location.hash.replace(/^#\/?/, '');
+      if (!hash) { show('home'); renderGrid(); return; }
+      const m = hash.match(/^day\/(\d{1,2})$/);
+      if (m) { renderTask(Number(m[1])); return; }
+      show('home'); renderGrid();
+    }
+
+    function renderTask(n) {
+      const t = TASKS.find(x => x.day === n);
+      if (!t) { location.hash = '#/'; return; }
+      show('task');
+
+      prevLink.href = `#/day/${Math.max(1, n - 1)}`;
+      nextLink.href = `#/day/${Math.min(24, n + 1)}`;
+
+      taskTitle.textContent = t.title;
+      taskBody.innerHTML = `${t.html}<p><em>Worth: ${getAwardPoints(n)} point${getAwardPoints(n) === 1 ? '' : 's'}${isHintUsed(n) ? ' (hint used)' : ''}</em></p>`;
+      document.title = `${t.title} • Advent Calendar`;
+
+      // Render images for the task (if any)
+      mediaWrap.innerHTML = '';
+      if (Array.isArray(t.images) && t.images.length) {
+        const parts = t.images.map((im, i) => {
+          const alt = (im.alt ?? `Task image ${i+1}`).replace(/"/g,'&quot;');
+          const cap = im.caption ? `<figcaption>${im.caption}</figcaption>` : '';
+          // link wraps image to allow open in new tab for larger view
+          return `
+            <figure>
+              <a class="media-link" href="${im.src}" target="_blank" rel="noopener noreferrer" title="Open image in new tab">
+                <img src="${im.src}" loading="lazy" alt="${alt}" />
+              </a>
+              ${cap}
+            </figure>
+          `;
+        });
+        mediaWrap.innerHTML = parts.join('');
+      }
+
+      // Hint UI
+      if (t.hint) {
+        hintCard.style.display = '';
+        const used = isHintUsed(n);
+        hintText.style.display = used ? '' : 'none';
+        hintText.textContent = used ? t.hint : '';
+        hintBtn.style.display = used ? 'none' : '';
+        hintNote.textContent = 'Revealing a hint halves the points for this day (rounded to nearest whole number).';
+        hintBtn.onclick = () => {
+          if (confirm('Reveal the hint? This will halve the points for this day.')) {
+            const h = getHints();
+            h[n] = true;
+            setHints(h);
+            renderTask(n);
+            renderGrid();
+          }
+        };
+      } else {
+        hintCard.style.display = 'none';
+      }
+
+      const answersMap = getUserAnswers();
+      answerInput.value = answersMap[n] || '';
+      if (answersMap[n] && isCorrect(n, answersMap[n])) {
+        answerStatus.textContent = '✅ Correct! This day is marked as done.';
+        answerStatus.className = 'status ok';
+      } else {
+        answerStatus.textContent = 'Enter the answer and press Check (or hit Enter).';
+        answerStatus.className = 'status';
+      }
+
+      checkBtn.onclick = () => tryCheck(n);
+      answerInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); tryCheck(n); } };
+    }
+
+    function tryCheck(day) {
+      const val = answerInput.value;
+      const user = getUserAnswers();
+      user[day] = val;
+      setUserAnswers(user);
+
+      const d = getDone();
+      if (isCorrect(day, val)) {
+        d[day] = true;
+        setDone(d);
+        answerStatus.textContent = `✅ Correct! +${getAwardPoints(day)} point${getAwardPoints(day)===1?'':'s'}.`;
+        answerStatus.className = 'status ok';
+        renderGrid();
+      } else {
+        d[day] = false;
+        setDone(d);
+        answerStatus.textContent = '❌ Not quite. Try again!';
+        answerStatus.className = 'status no';
+        renderGrid();
+      }
+    }
+
+    window.addEventListener('hashchange', route);
+    route();
+
+    // Snow
+    function makeSnow() {
+      const c = document.getElementById('snow');
+      const count = Math.min(80, Math.max(35, Math.floor(window.innerWidth / 24)));
+      c.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const s = document.createElement('div');
+        s.className = 'flake';
+        s.textContent = '❄';
+        const size = 10 + Math.random() * 12; // px
+        const left = Math.random() * 100;
+        const dur = 8 + Math.random() * 12; // seconds
+        const delay = -Math.random() * dur;
+        s.style.left = left + 'vw';
+        s.style.fontSize = size + 'px';
+        s.style.animationDuration = dur + 's';
+        s.style.animationDelay = delay + 's';
+        s.style.opacity = 0.6 + Math.random() * 0.4;
+        c.appendChild(s);
+      }
+    }
+    makeSnow();
+    window.addEventListener('resize', () => { clearTimeout(window.__snowTimer); window.__snowTimer = setTimeout(makeSnow, 150); });
+  </script>
+</body>
+</html>
