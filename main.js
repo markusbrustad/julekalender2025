@@ -223,15 +223,43 @@ onAuthStateChanged(auth, (user) => {
 
 window.addEventListener("hashchange", () => {
   const hash = location.hash || "#/";
+ function handleRoute() {
+  const hash = location.hash || "#/";
+
+  // examples:
+  // #/            -> home
+  // #/leaderboard -> leaderboard
+  // #/day/5       -> task view for day 5
+
   if (hash.startsWith("#/leaderboard")) {
     showView("leaderboard");
     loadLeaderboard().catch(console.error);
-  } else if (hash === "#/" || hash === "") {
-    showView("home");
-  } else {
-    showView("login");
+    return;
   }
+
+  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
+  if (m) {
+    const day = parseInt(m[1], 10);
+    // TODO: load your day content here
+    // e.g., loadTask(day);
+    showView("task");
+    return;
+  }
+
+  if (hash === "#/" || hash === "") {
+    showView("home");
+    return;
+  }
+
+  // Fallback: unknown route -> home (NOT login)
+  showView("home");
+}
+
+window.addEventListener("hashchange", handleRoute);
+if (!location.hash) location.hash = "#/";
+handleRoute();
 });
+
 if (!location.hash) location.hash = "#/";
 if (location.hash.startsWith("#/leaderboard")) {
   showView("leaderboard");
