@@ -44,12 +44,12 @@ const firebaseConfig = {
   measurementId: "G-J5RF50Q048"
 };
 //ReCaptcha
-//import { initializeAppCheck, ReCaptchaEnterpriseProvider } 
-  //from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
+//import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
+
 
 //const appCheck = initializeAppCheck(app, {
-  //provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
-  //isTokenAutoRefreshEnabled: true,
+//  provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
+//  isTokenAutoRefreshEnabled: true,
 //});
 
 /* ---------- Globals / helpers ---------- */
