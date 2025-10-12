@@ -28,13 +28,23 @@ function saveUser(userId, nickname) {
   currentUser = { id: userId, nickname: nickname };
 }
 
-// Oppdater leaderboard (local version for now)
+// Oppdater leaderboard (now with Firebase integration)
 async function updateLeaderboard() {
-  if (!currentUser) return;
+  if (!window.firebaseUser) return;
   
-  console.log('Leaderboard update (local mode):', {
-    id: currentUser.id,
-    nickname: currentUser.nickname,
+  // Update Firebase with current total points
+  if (window.updateTotalPoints) {
+    try {
+      const currentPoints = computeTotalPoints();
+      await window.updateTotalPoints(currentPoints);
+      console.log('Updated Firebase with total points:', currentPoints);
+    } catch (error) {
+      console.error('Failed to update Firebase leaderboard:', error);
+    }
+  }
+  
+  console.log('Leaderboard update:', {
+    user: window.firebaseUser.displayName,
     points: computeTotalPoints(),
     completedDays: Object.values(getDone()).filter(Boolean).length
   });
@@ -323,6 +333,13 @@ function generateNewUser() {
 
 // Leaderboard
 async function renderLeaderboard() {
+  // Use Firebase leaderboard from main.js if available
+  if (window.loadLeaderboard) {
+    await window.loadLeaderboard();
+    return;
+  }
+  
+  // Fallback to local version
   const leaderboardData = await getLeaderboard();
   const leaderboardList = document.getElementById('leaderboardList');
   
