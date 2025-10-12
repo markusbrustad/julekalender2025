@@ -57,9 +57,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const showView = (id) => {
-  document.querySelectorAll(".view").forEach(v => v.style.display = "none");
+  // Use the same view system as app.js
+  document.querySelectorAll(".view").forEach(v => v.classList.remove('active'));
   const el = $(id);
-  if (el) el.style.display = "block";
+  if (el) el.classList.add('active');
 };
 const normalizeUsername = (u) => (u || "").trim().toLowerCase();
 const isUsernameValid = (u) => /^[a-zA-Z0-9_-]{3,20}$/.test(u);
@@ -75,34 +76,7 @@ const needsReauth = (user) => {
 };
 
 /* ---------- Router ---------- */
-function handleRoute() {
-  const hash = location.hash || "#/";
-
-  if (hash.startsWith("#/leaderboard")) {
-    showView("leaderboard");
-    loadLeaderboard().catch(console.error);
-    return;
-  }
-
-  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
-  if (m) {
-    const day = parseInt(m[1], 10);
-    if (day >= 1 && day <= 24) {
-      const title = $("taskTitle");
-      if (title) title.textContent = `Dag ${day}`;
-      // TODO: loadTask(day); // hook your task content here
-      showView("task");
-      return;
-    }
-  }
-
-  if (hash === "#/" || hash === "") {
-    showView("home");
-    return;
-  }
-
-  showView("home");
-}
+// Router functionality moved to app.js to avoid conflicts
 
 /* ---------- Leaderboard ---------- */
 async function loadLeaderboard() {
@@ -216,7 +190,7 @@ window.addEventListener("DOMContentLoaded", () => {
       markJustLoggedIn();
       setText("scoreLine", "Totale poeng: 0");
       if (!location.hash) location.hash = "#/";
-      handleRoute();
+      if (window.route) window.route();
       errEl.textContent = "";
       // Switch default tab back to sign-in for next visit
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
@@ -245,7 +219,7 @@ window.addEventListener("DOMContentLoaded", () => {
       markJustLoggedIn();
       setText("scoreLine", "Totale poeng: 0");
       if (!location.hash) location.hash = "#/";
-      handleRoute();
+      if (window.route) window.route();
       errEl.textContent = "";
     } catch {
       errEl.textContent = "Feil brukernavn eller passord.";
@@ -277,16 +251,15 @@ window.addEventListener("DOMContentLoaded", () => {
         $("signInForm").style.display="block"; $("signUpForm").style.display="none";
         return;
       }
-      handleRoute();
+      // Let app.js handle routing
+      if (window.route) window.route();
     } else {
       showView("login");
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
     }
   });
 
-  // Router wiring (after listeners exist)
-  window.addEventListener("hashchange", handleRoute);
+  // Router wiring handled by app.js
   if (!location.hash) location.hash = "#/";
-  handleRoute();
 });
 
