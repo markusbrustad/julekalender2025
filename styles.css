@@ -232,6 +232,7 @@ footer {
 
 footer a { color: var(--accent); }
 
+/* Make sure decorative overlays never block clicks */
 .snow { 
   position: fixed; 
   inset: 0; 
