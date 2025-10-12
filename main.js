@@ -83,21 +83,55 @@ async function loadLeaderboard() {
   const list = $("leaderboardList");
   if (!list) return;
   list.innerHTML = "";
-  const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
-  const snap = await getDocs(q);
-  let rank = 1;
-  snap.forEach(docSnap => {
-    const u = docSnap.data();
-    if (u.public !== false) {
-      const li = document.createElement("li");
-      const name = u.username || "(ukjent)";
-      const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
-      li.textContent = `${rank}. ${name} — ${pts} poeng`;
-      list.appendChild(li);
-      rank++;
+  
+  try {
+    const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
+    const snap = await getDocs(q);
+    let rank = 1;
+    
+    snap.forEach(docSnap => {
+      const u = docSnap.data();
+      if (u.public !== false) {
+        const li = document.createElement("li");
+        li.className = "leaderboard-item";
+        
+        // Check if this is the current user
+        if (window.firebaseUser && u.uid === window.firebaseUser.uid) {
+          li.classList.add("current-user");
+        }
+        
+        const name = u.username || "(ukjent)";
+        const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+        
+        li.innerHTML = `
+          <div class="rank">${medal} ${rank}</div>
+          <div class="user-info">
+            <div class="nickname">${name}</div>
+            <div class="user-id">ID: ${u.uid ? u.uid.substring(0, 8) + '...' : 'N/A'}</div>
+          </div>
+          <div class="stats">
+            <div class="points">${pts} p</div>
+            <div class="completed">Firebase</div>
+          </div>
+        `;
+        
+        list.appendChild(li);
+        rank++;
+      }
+    });
+    
+    if (rank === 1) {
+      list.innerHTML = '<p style="text-align: center; color: var(--muted);">Ingen spillere ennå!</p>';
     }
-  });
+  } catch (error) {
+    console.error('Failed to load leaderboard:', error);
+    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Feil ved lasting av leaderboard</p>';
+  }
 }
+
+// Make loadLeaderboard globally accessible for app.js
+window.loadLeaderboard = loadLeaderboard;
 
 /* ---------- Public helper for scoring ---------- */
 export async function addPointsForUser(points) {
@@ -118,6 +152,24 @@ export async function addPointsForUser(points) {
     line.textContent = `Totale poeng: ${curr + points}`;
   }
 }
+
+// Make addPointsForUser globally accessible for app.js
+window.addPointsForUser = addPointsForUser;
+
+// Function to update total points in Firebase
+async function updateTotalPoints(totalPoints) {
+  const user = auth.currentUser;
+  if (!user) return;
+  const ref = doc(db, "users", user.uid);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Profil ikke funnet.");
+    tx.set(ref, { totalPoints: totalPoints, lastSeenAt: serverTimestamp() }, { merge: true });
+  });
+}
+
+// Make updateTotalPoints globally accessible for app.js
+window.updateTotalPoints = updateTotalPoints;
 
 /* ---------- Firebase instances (created after DOM ready) ---------- */
 let app, auth, db;
