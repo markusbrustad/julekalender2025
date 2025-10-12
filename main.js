@@ -42,7 +42,7 @@ const firebaseConfig = {
   messagingSenderId: "601016214749",
   appId: "1:601016214749:web:0ef3a57589d12cde45e734",
   measurementId: "G-J5RF50Q048"
-//};
+};
 //ReCaptcha
 //import { initializeAppCheck, ReCaptchaEnterpriseProvider } 
   //from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
@@ -50,7 +50,7 @@ const firebaseConfig = {
 //const appCheck = initializeAppCheck(app, {
   //provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
   //isTokenAutoRefreshEnabled: true,
-});
+//});
 
 /* ---------- Globals / helpers ---------- */
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -121,6 +121,9 @@ export async function addPointsForUser(points) {
 
 /* ---------- Firebase instances (created after DOM ready) ---------- */
 let app, auth, db;
+
+// Initialize global Firebase user variable
+window.firebaseUser = null;
 
 /* ---------- Init on DOM ready ---------- */
 window.addEventListener("DOMContentLoaded", () => {
@@ -243,6 +246,9 @@ window.addEventListener("DOMContentLoaded", () => {
   onAuthStateChanged(auth, async (user) => {
     const btn = $("btnLogout");
     if (btn) btn.style.display = user ? "inline-block" : "none";
+
+    // Set global Firebase user for app.js
+    window.firebaseUser = user;
 
     if (user) {
       if (needsReauth(user)) {
