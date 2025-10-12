@@ -84,6 +84,14 @@ async function loadLeaderboard() {
   if (!list) return;
   list.innerHTML = "";
   
+  const auth = window.firebaseAuth;
+  const db = window.firebaseDb;
+  
+  if (!auth || !db) {
+    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Firebase ikke initialisert ennå</p>';
+    return;
+  }
+  
   try {
     const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
     const snap = await getDocs(q);
@@ -158,14 +166,51 @@ window.addPointsForUser = addPointsForUser;
 
 // Function to update total points in Firebase
 async function updateTotalPoints(totalPoints) {
+  const auth = window.firebaseAuth;
+  const db = window.firebaseDb;
+  
+  if (!auth || !db) {
+    console.error('Firebase not initialized yet');
+    return;
+  }
+  
   const user = auth.currentUser;
-  if (!user) return;
+  if (!user) {
+    console.error('No Firebase user found');
+    return;
+  }
+  
   const ref = doc(db, "users", user.uid);
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw new Error("Profil ikke funnet.");
-    tx.set(ref, { totalPoints: totalPoints, lastSeenAt: serverTimestamp() }, { merge: true });
-  });
+  
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      
+      // If user document doesn't exist, create it
+      if (!snap.exists()) {
+        console.log('Creating new user document in Firebase');
+        tx.set(ref, {
+          uid: user.uid,
+          username: user.displayName || 'Unknown',
+          totalPoints: totalPoints,
+          public: true,
+          createdAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp()
+        });
+      } else {
+        // Update existing user
+        tx.set(ref, { 
+          totalPoints: totalPoints, 
+          lastSeenAt: serverTimestamp() 
+        }, { merge: true });
+      }
+    });
+    
+    console.log('Successfully updated Firebase with total points:', totalPoints);
+  } catch (error) {
+    console.error('Failed to update Firebase points:', error);
+    throw error;
+  }
 }
 
 // Make updateTotalPoints globally accessible for app.js
@@ -176,6 +221,10 @@ let app, auth, db;
 
 // Initialize global Firebase user variable
 window.firebaseUser = null;
+
+// Make Firebase instances globally accessible
+window.firebaseAuth = null;
+window.firebaseDb = null;
 
 /* ---------- Init on DOM ready ---------- */
 window.addEventListener("DOMContentLoaded", () => {
@@ -194,6 +243,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   auth = getAuth(app);
   db = getFirestore(app);
+  
+  // Make Firebase instances globally accessible
+  window.firebaseAuth = auth;
+  window.firebaseDb = db;
 
   // Persistence without top-level await
   setPersistence(auth, browserLocalPersistence).catch(console.error);
