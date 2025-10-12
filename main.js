@@ -34,13 +34,13 @@ const firebaseConfig = {
   appId: "1:601016214749:web:0ef3a57589d12cde45e734",
   measurementId: "G-J5RF50Q048"
 };
+//ReCaptcha
+//import { initializeAppCheck, ReCaptchaEnterpriseProvider } 
+  //from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
 
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } 
-  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
-
-const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
-  isTokenAutoRefreshEnabled: true,
+//const appCheck = initializeAppCheck(app, {
+  //provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
+  //isTokenAutoRefreshEnabled: true,
 });
 
 const app = initializeApp(firebaseConfig);
