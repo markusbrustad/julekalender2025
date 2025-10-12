@@ -35,6 +35,14 @@ const firebaseConfig = {
   measurementId: "G-J5RF50Q048"
 };
 
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } 
+  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
+
+const appCheck = initializeAppCheck(app, {
+  provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
+  isTokenAutoRefreshEnabled: true,
+});
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
