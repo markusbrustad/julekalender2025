@@ -39,134 +39,93 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider }
   from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
 
 const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
+  provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
   isTokenAutoRefreshEnabled: true,
 });
 
 const app = initializeApp(firebaseConfig);
+
+// (Optional) App Check – uncomment if enabled in Console
+// const appCheck = initializeAppCheck(app, {
+//   provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
+//   isTokenAutoRefreshEnabled: true,
+// });
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/** Helpers **/
+// Ensure auth state persists on this device
+await setPersistence(auth, browserLocalPersistence);
+
+/* ------------------ Small DOM helpers ------------------ */
 const $ = (id) => document.getElementById(id);
+const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const showView = (id) => {
   document.querySelectorAll(".view").forEach(v => v.style.display = "none");
   const el = $(id);
   if (el) el.style.display = "block";
 };
-const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 
-function normalizeUsername(u) { return u.trim().toLowerCase(); }
+/* ------------------ Username helpers ------------------ */
+function normalizeUsername(u) { return (u || "").trim().toLowerCase(); }
 function isUsernameValid(u) { return /^[a-zA-Z0-9_-]{3,20}$/.test(u); }
 function synthEmailFromUsername(u) { return `${u}@advent.local`; } // synthetic only
 
-// === Logout button ===
-const logoutBtn = document.getElementById("btnLogout");
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", async () => {
-    try {
-      await signOut(auth);
-      console.log("Bruker logget ut");
-      // Hide button immediately
-      logoutBtn.style.display = "none";
-      // Reset view
-      setText("scoreLine", "Totale poeng: 0");
-      showView("login");
-      showSignIn();
-      location.hash = "#/login";
-    } catch (err) {
-      console.error("Logout feilet:", err);
-    }
-  });
+/* ------------------ Session policy: 24h relogin ------------------ */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function markJustLoggedIn() {
+  try { localStorage.setItem("advent_last_login_ts", String(Date.now())); } catch {}
 }
 
-
-
-/** Tabs **/
-function showSignIn(){ $("signInForm").style.display="block"; $("signUpForm").style.display="none"; }
-function showSignUp(){ $("signInForm").style.display="none"; $("signUpForm").style.display="block"; }
-$("tabSignIn")?.addEventListener("click", showSignIn);
-$("tabSignUp")?.addEventListener("click", showSignUp);
-
-/** SIGN UP **/
-$("btnSignUp")?.addEventListener("click", async () => {
-  const raw = $("signupUsername")?.value || "";
-  const password = $("signupPassword")?.value || "";
-  const errEl = $("signupError");
-
-  const username = normalizeUsername(raw);
-  if (!isUsernameValid(username)) { errEl.textContent = "Ugyldig brukernavn (3–20 tegn, bokstaver/tall/_/-)."; return; }
-  if (!password || password.length < 6) { errEl.textContent = "Passord må ha minst 6 tegn."; return; }
-
+function needsReauth(user) {
   try {
-    // Try creating an auth user with a synthetic email derived from the username.
-    // If it already exists, Firebase will return "email-already-in-use" => username taken.
-    const email = synthEmailFromUsername(username);
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const user = cred.user;
+    const last = user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).getTime() : null;
+    if (last && (Date.now() - last > DAY_MS)) return true;
+  } catch {}
+  const local = parseInt(localStorage.getItem("advent_last_login_ts") || "0", 10);
+  return (Date.now() - local) > DAY_MS;
+}
 
-    // Display name == username
-    await updateProfile(user, { displayName: username });
+/* ------------------ Router ------------------ */
+function handleRoute() {
+  const hash = location.hash || "#/";
 
-    // Write username mapping and profile
-    const unameRef = doc(db, "usernames", username);
-    const userRef = doc(db, "users", user.uid);
+  // #/leaderboard
+  if (hash.startsWith("#/leaderboard")) {
+    showView("leaderboard");
+    loadLeaderboard().catch(console.error);
+    return;
+  }
 
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(unameRef);
-      if (snap.exists() && snap.data().uid !== user.uid) {
-        throw new Error("Brukernavnet er tatt. Velg et annet.");
-      }
-      tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
-      tx.set(userRef, {
-        uid: user.uid,
-        username,
-        totalPoints: 0,
-        public: true,
-        createdAt: serverTimestamp(),
-        lastSeenAt: serverTimestamp()
-      }, { merge: true });
-    });
-
-    setText("scoreLine", "Totale poeng: 0");
-    showView("home");
-    location.hash = "#/";
-    errEl.textContent = "";
-    showSignIn(); // next time default to Logg inn
-  } catch (e) {
-    if (e?.code === "auth/email-already-in-use") {
-      errEl.textContent = "Brukernavnet er allerede i bruk.";
-    } else if (e?.message) {
-      errEl.textContent = e.message;
-    } else {
-      errEl.textContent = "Klarte ikke å opprette bruker.";
+  // #/day/5 or #/task/12 (1-24)
+  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
+  if (m) {
+    const day = parseInt(m[1], 10);
+    if (day >= 1 && day <= 24) {
+      // Hook this into your actual task loading/rendering:
+      // e.g., loadTask(day);
+      const title = $("taskTitle");
+      if (title) title.textContent = `Dag ${day}`;
+      showView("task");
+      return;
     }
   }
-});
 
-/** SIGN IN (username only) **/
-$("btnSignIn")?.addEventListener("click", async () => {
-  const raw = ($("signinUsername")?.value || "").trim();
-  const password = $("signinPassword")?.value || "";
-  const errEl = $("loginError");
-
-  const username = normalizeUsername(raw);
-  if (!isUsernameValid(username)) { errEl.textContent = "Sjekk brukernavn."; return; }
-  if (!password) { errEl.textContent = "Skriv inn passord."; return; }
-
-  try {
-    const email = synthEmailFromUsername(username);
-    await signInWithEmailAndPassword(auth, email, password);
-    setText("scoreLine", "Totale poeng: 0");
+  // Home
+  if (hash === "#/" || hash === "") {
     showView("home");
-    location.hash = "#/";
-    errEl.textContent = "";
-  } catch (e) {
-    errEl.textContent = "Feil brukernavn eller passord.";
+    return;
   }
-});
 
-/** Leaderboard **/
+  // Fallback -> home (not login)
+  showView("home");
+}
+
+window.addEventListener("hashchange", handleRoute);
+if (!location.hash) location.hash = "#/";
+
+/* ------------------ Leaderboard ------------------ */
 async function loadLeaderboard() {
   const list = $("leaderboardList");
   if (!list) return;
@@ -187,7 +146,8 @@ async function loadLeaderboard() {
   });
 }
 
-/** Award points (by current user) **/
+/* ------------------ Points helper ------------------ */
+// Call after a correct answer: await addPointsForUser(points);
 export async function addPointsForUser(points) {
   const user = auth.currentUser;
   if (!user) throw new Error("Ikke logget inn.");
@@ -207,65 +167,126 @@ export async function addPointsForUser(points) {
   }
 }
 
-/** Routing **/
-onAuthStateChanged(auth, (user) => {
-  const btn = document.getElementById("btnLogout");
+/* ------------------ Tabs (login/signup) ------------------ */
+function showSignIn(){ $("signInForm").style.display="block"; $("signUpForm").style.display="none"; }
+function showSignUp(){ $("signInForm").style.display="none"; $("signUpForm").style.display="block"; }
+$("tabSignIn")?.addEventListener("click", showSignIn);
+$("tabSignUp")?.addEventListener("click", showSignUp);
+
+/* ------------------ Sign up (username + password, no email) ------------------ */
+$("btnSignUp")?.addEventListener("click", async () => {
+  const raw = $("signupUsername")?.value || "";
+  const password = $("signupPassword")?.value || "";
+  const errEl = $("signupError");
+
+  const username = normalizeUsername(raw);
+  if (!isUsernameValid(username)) { errEl.textContent = "Ugyldig brukernavn (3–20 tegn, bokstaver/tall/_/-)."; return; }
+  if (!password || password.length < 6) { errEl.textContent = "Passord må ha minst 6 tegn."; return; }
+
+  try {
+    // Create auth user using synthetic email derived from username
+    const email = synthEmailFromUsername(username);
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const user = cred.user;
+
+    // Display name == username
+    await updateProfile(user, { displayName: username });
+
+    // Persist username mapping + profile
+    const unameRef = doc(db, "usernames", username);
+    const userRef = doc(db, "users", user.uid);
+
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(unameRef);
+      if (snap.exists() && snap.data().uid !== user.uid) {
+        throw new Error("Brukernavnet er tatt. Velg et annet.");
+      }
+      tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
+      tx.set(userRef, {
+        uid: user.uid,
+        username,
+        totalPoints: 0,
+        public: true,
+        createdAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp()
+      }, { merge: true });
+    });
+
+    markJustLoggedIn();
+    setText("scoreLine", "Totale poeng: 0");
+    location.hash = "#/";
+    handleRoute();
+    errEl.textContent = "";
+    showSignIn();
+  } catch (e) {
+    if (e?.code === "auth/email-already-in-use") {
+      errEl.textContent = "Brukernavnet er allerede i bruk.";
+    } else if (e?.message) {
+      errEl.textContent = e.message;
+    } else {
+      errEl.textContent = "Klarte ikke å opprette bruker.";
+    }
+  }
+});
+
+/* ------------------ Sign in (username + password) ------------------ */
+$("btnSignIn")?.addEventListener("click", async () => {
+  const raw = ($("signinUsername")?.value || "").trim();
+  const password = $("signinPassword")?.value || "";
+  const errEl = $("loginError");
+
+  const username = normalizeUsername(raw);
+  if (!isUsernameValid(username)) { errEl.textContent = "Sjekk brukernavn."; return; }
+  if (!password) { errEl.textContent = "Skriv inn passord."; return; }
+
+  try {
+    const email = synthEmailFromUsername(username);
+    await signInWithEmailAndPassword(auth, email, password);
+    markJustLoggedIn();
+    setText("scoreLine", "Totale poeng: 0");
+    location.hash = location.hash || "#/";
+    handleRoute();
+    errEl.textContent = "";
+  } catch (e) {
+    errEl.textContent = "Feil brukernavn eller passord.";
+  }
+});
+
+/* ------------------ Logout ------------------ */
+$("btnLogout")?.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    setText("scoreLine", "Totale poeng: 0");
+    showView("login");
+    showSignIn();
+    location.hash = "#/";
+  } catch (e) {
+    console.error("Logout feilet:", e);
+  }
+});
+
+/* ------------------ Auth state -> UI & 24h rule ------------------ */
+onAuthStateChanged(auth, async (user) => {
+  // Toggle logout button
+  const btn = $("btnLogout");
   if (btn) btn.style.display = user ? "inline-block" : "none";
 
   if (user) {
-    showView("home");
+    // Enforce 24-hour re-auth
+    if (needsReauth(user)) {
+      await signOut(auth);
+      showView("login");
+      showSignIn();
+      return;
+    }
+    // Signed in and fresh
+    handleRoute();
   } else {
+    // Not signed in
     showView("login");
     showSignIn();
   }
 });
 
-
-window.addEventListener("hashchange", () => {
-  const hash = location.hash || "#/";
- function handleRoute() {
-  const hash = location.hash || "#/";
-
-  // examples:
-  // #/            -> home
-  // #/leaderboard -> leaderboard
-  // #/day/5       -> task view for day 5
-
-  if (hash.startsWith("#/leaderboard")) {
-    showView("leaderboard");
-    loadLeaderboard().catch(console.error);
-    return;
-  }
-
-  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
-  if (m) {
-    const day = parseInt(m[1], 10);
-    // TODO: load your day content here
-    // e.g., loadTask(day);
-    showView("task");
-    return;
-  }
-
-  if (hash === "#/" || hash === "") {
-    showView("home");
-    return;
-  }
-
-  // Fallback: unknown route -> home (NOT login)
-  showView("home");
-}
-
-window.addEventListener("hashchange", handleRoute);
-if (!location.hash) location.hash = "#/";
+/* ------------------ Initial render ------------------ */
 handleRoute();
-});
-
-if (!location.hash) location.hash = "#/";
-if (location.hash.startsWith("#/leaderboard")) {
-  showView("leaderboard");
-  loadLeaderboard().catch(console.error);
-} else if (location.hash === "#/") {
-  showView("home");
-} else {
-  showView("login");
-}
