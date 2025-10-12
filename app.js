@@ -30,17 +30,27 @@ function saveUser(userId, nickname) {
 
 // Oppdater leaderboard (now with Firebase integration)
 async function updateLeaderboard() {
-  if (!window.firebaseUser) return;
+  console.log('updateLeaderboard called');
+  
+  if (!window.firebaseUser) {
+    console.log('No Firebase user, skipping leaderboard update');
+    return;
+  }
+  
+  console.log('Firebase user found:', window.firebaseUser.displayName);
   
   // Update Firebase with current total points
   if (window.updateTotalPoints) {
     try {
       const currentPoints = computeTotalPoints();
+      console.log('Attempting to update Firebase with points:', currentPoints);
       await window.updateTotalPoints(currentPoints);
-      console.log('Updated Firebase with total points:', currentPoints);
+      console.log('Successfully updated Firebase with total points:', currentPoints);
     } catch (error) {
       console.error('Failed to update Firebase leaderboard:', error);
     }
+  } else {
+    console.log('updateTotalPoints function not available');
   }
   
   console.log('Leaderboard update:', {
