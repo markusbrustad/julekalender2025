@@ -89,9 +89,9 @@ const TASKS = [
   { day: 24, title: 'Dag 24: Oppgave', html: '<p>Oppgave 24 beskrivelse</p>', answers: ['eksempel'], points: 4 }
 ];
 
-// Persistence (2025) - nå med bruker-spesifikke nøkler
+// Persistence (2025) - now with Firebase user-specific keys
 function getUserStorageKey(baseKey) {
-  return currentUser ? `${baseKey}_${currentUser.id}` : baseKey;
+  return window.firebaseUser ? `${baseKey}_${window.firebaseUser.uid}` : baseKey;
 }
 
 const LS_DONE = 'advent25_done';
@@ -152,7 +152,7 @@ function renderGrid() {
   });
 
   const total = computeTotalPoints();
-  const userInfo = currentUser ? ` (${currentUser.nickname})` : '';
+  const userInfo = window.firebaseUser ? ` (${window.firebaseUser.displayName || 'Bruker'})` : '';
   scoreLine.textContent = `Totale poeng: ${total} / ${MAX_POINTS}${userInfo}`;
   todayText.textContent = 'Redigeringsmodus: alle dager er for øyeblikket åpne. Grønn = besvart riktig.';
   dateInfo.textContent = 'Alle dager låst opp for redigering (Europe/Oslo).';
@@ -179,12 +179,12 @@ function show(view) {
 }
 
 function route() {
-  // Always check for current user first
-  currentUser = getCurrentUser();
+  // Check Firebase auth state instead of localStorage
+  const firebaseUser = window.firebaseUser;
   
   const hash = location.hash.replace(/^#\/?/, '');
   if (!hash) { 
-    if (!currentUser) {
+    if (!firebaseUser) {
       show('login');
       return;
     }
@@ -364,7 +364,18 @@ async function renderLeaderboard() {
 // Initialize
 console.log('🎄 Adventskalender 2025 - Starting in local mode');
 window.addEventListener('hashchange', route);
-route();
+
+// Wait for Firebase to be ready before initial routing
+function waitForFirebase() {
+  if (typeof window.firebaseUser !== 'undefined') {
+    route();
+  } else {
+    setTimeout(waitForFirebase, 100);
+  }
+}
+
+// Start waiting for Firebase
+waitForFirebase();
 
 // Snow
 function makeSnow() {
