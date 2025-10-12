@@ -198,6 +198,9 @@ function route() {
   show('home'); renderGrid();
 }
 
+// Make route function globally available for main.js
+window.route = route;
+
 function renderTask(n) {
   const t = TASKS.find(x => x.day === n);
   if (!t) { location.hash = '#/'; return; }
