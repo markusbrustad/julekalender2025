@@ -43,21 +43,12 @@ const firebaseConfig = {
   appId: "1:601016214749:web:0ef3a57589d12cde45e734",
   measurementId: "G-J5RF50Q048"
 };
-//ReCaptcha
-//import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app-check.js";
-
-
-//const appCheck = initializeAppCheck(app, {
-//  provider: new ReCaptchaEnterpriseProvider("6LdtqecrAAAAAILyMpgNE_fvf7BJdd6ShTvH4_t5"),
-//  isTokenAutoRefreshEnabled: true,
-//});
 
 /* ---------- Small helpers ---------- */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const showView = (id) => {
-  // Hard hide all, then show target (prevents hidden views covering the page)
   document.querySelectorAll(".view").forEach(v => { v.style.display = "none"; v.classList.remove("is-active"); });
   const el = $(id);
   if (el) { el.style.display = "block"; el.classList.add("is-active"); }
@@ -75,6 +66,81 @@ const needsReauth = (user) => {
   return (Date.now() - local) > DAY_MS;
 };
 
+/* ---------- SIMPLE CONTENT LAYER (placeholders so you can see it working) ---------- */
+// If you have real tasks elsewhere (e.g., tasks.js), you can swap this out.
+const TASKS = Array.from({ length: 24 }, (_, i) => {
+  const d = i + 1;
+  return {
+    title: `Dag ${d}`,
+    body: `Oppgave for dag ${d}. (Dette er en placeholder-tekst. Bytt ut med ekte innhold.)`,
+    hint: `Hint for dag ${d} (valgfritt).`,
+  };
+});
+
+/* Build the 24 day tiles into #grid */
+function renderHomeGrid() {
+  const grid = $("grid");
+  if (!grid) return;
+
+  // If an external grid renderer exists (from your old app.js), use that instead
+  if (typeof window.renderGrid === "function") {
+    window.renderGrid(); // your own implementation
+    return;
+  }
+
+  grid.innerHTML = ""; // clear
+  for (let day = 1; day <= 24; day++) {
+    const a = document.createElement("a");
+    a.href = `#/day/${day}`;
+    a.className = "door";
+    a.setAttribute("aria-label", `Åpne dag ${day}`);
+    a.innerHTML = `
+      <div class="door-inner">
+        <div class="door-num">${day}</div>
+        <div class="door-status">Åpen</div>
+      </div>`;
+    grid.appendChild(a);
+  }
+}
+
+/* Fill the Task view for a given day */
+function loadTask(day) {
+  const t = TASKS[day - 1] || { title: `Dag ${day}`, body: "Ingen oppgave definert enda.", hint: "" };
+
+  setText("taskTitle", t.title);
+  const body = $("taskBody");
+  if (body) body.innerHTML = `<p>${t.body}</p>`;
+
+  // Optional media
+  const media = $("taskMedia");
+  if (media) media.innerHTML = "";
+
+  // Hint UI
+  const hintCard = $("hintCard");
+  const hintBtn = $("hintBtn");
+  const hintText = $("hintText");
+  if (t.hint && hintCard && hintBtn && hintText) {
+    hintCard.style.display = "block";
+    hintText.style.display = "none";
+    hintBtn.onclick = () => {
+      hintText.textContent = t.hint;
+      hintText.style.display = "block";
+      // Your scoring: halve points here if you want
+    };
+  } else if (hintCard) {
+    hintCard.style.display = "none";
+  }
+
+  // Answer area (leave your check logic in another module if you have it)
+  setText("answerStatus", "Skriv inn svaret og trykk Sjekk (eller trykk Enter).");
+
+  // Prev/Next links
+  const prev = $("prevLink");
+  const next = $("nextLink");
+  if (prev) prev.href = day > 1 ? `#/day/${day - 1}` : "#/";
+  if (next) next.href = day < 24 ? `#/day/${day + 1}` : "#/";
+}
+
 /* ---------- Router ---------- */
 function handleRoute() {
   const hash = location.hash || "#/";
@@ -89,9 +155,7 @@ function handleRoute() {
   if (m) {
     const day = parseInt(m[1], 10);
     if (day >= 1 && day <= 24) {
-      const title = $("taskTitle");
-      if (title) title.textContent = `Dag ${day}`;
-      // TODO: loadTask(day) if you have per-day content to render
+      loadTask(day);
       showView("task");
       return;
     }
@@ -99,11 +163,13 @@ function handleRoute() {
 
   if (hash === "#/" || hash === "") {
     showView("home");
+    renderHomeGrid(); // <— make sure grid is built when home shows
     return;
   }
 
-  // Fallback to home (not login)
+  // Fallback -> home
   showView("home");
+  renderHomeGrid();
 }
 
 /* ---------- Leaderboard ---------- */
@@ -127,7 +193,7 @@ async function loadLeaderboard() {
   });
 }
 
-/* ---------- Points helper ---------- */
+/* ---------- Points helper (exported) ---------- */
 export async function addPointsForUser(points) {
   const user = auth.currentUser;
   if (!user) throw new Error("Ikke logget inn.");
@@ -152,36 +218,25 @@ let app, auth, db;
 
 /* ---------- Init after DOM is ready ---------- */
 window.addEventListener("DOMContentLoaded", () => {
-  // Defensive: make sure decorative overlays never block clicks
-  const snow = $("snow");
-  if (snow) snow.style.pointerEvents = "none";
+  // Make sure decorative overlays never block clicks
+  const snow = $("snow"); if (snow) snow.style.pointerEvents = "none";
 
   // Init Firebase
   app = initializeApp(firebaseConfig);
-
-  // Optional App Check (uncomment if enabled in Console)
-  // initializeAppCheck(app, {
-  //   provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
-  //   isTokenAutoRefreshEnabled: true,
-  // });
+  // Optional App Check
+  // initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"), isTokenAutoRefreshEnabled: true });
 
   auth = getAuth(app);
   db = getFirestore(app);
 
-  // Persist login on this device (no top-level await)
+  // Persist login on this device
   setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-  /* ----- Tabs (Logg inn / Registrer) ----- */
-  $("tabSignIn")?.addEventListener("click", (e) => {
-    e?.preventDefault?.();
-    $("signInForm").style.display="block"; $("signUpForm").style.display="none";
-  });
-  $("tabSignUp")?.addEventListener("click", (e) => {
-    e?.preventDefault?.();
-    $("signInForm").style.display="none"; $("signUpForm").style.display="block";
-  });
+  // Tabs (login/signup)
+  $("tabSignIn")?.addEventListener("click", (e) => { e?.preventDefault?.(); $("signInForm").style.display="block"; $("signUpForm").style.display="none"; });
+  $("tabSignUp")?.addEventListener("click", (e) => { e?.preventDefault?.(); $("signInForm").style.display="none"; $("signUpForm").style.display="block"; });
 
-  /* ----- Sign up (username + password, no email) ----- */
+  // Sign up
   $("btnSignUp")?.addEventListener("click", async (e) => {
     e?.preventDefault?.();
     const raw = $("signupUsername")?.value || "";
@@ -194,50 +249,16 @@ window.addEventListener("DOMContentLoaded", () => {
 
     try {
       const email = synthEmailFromUsername(username);
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const user = cred.user;
-
-      await updateProfile(user, { displayName: username });
-
-      const unameRef = doc(db, "usernames", username);
-      const userRef = doc(db, "users", user.uid);
-
-      await runTransaction(db, async (tx) => {
-        const snap = await tx.get(unameRef);
-        if (snap.exists() && snap.data().uid !== user.uid) {
-          throw new Error("Brukernavnet er tatt. Velg et annet.");
-        }
-        tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
-        tx.set(userRef, {
-          uid: user.uid,
-          username,
-          totalPoints: 0,
-          public: true,
-          createdAt: serverTimestamp(),
-          lastSeenAt: serverTimestamp()
-        }, { merge: true });
-      });
-
-      // Mark session start and flip to main immediately
-      markJustLoggedIn();
-      setText("scoreLine", "Totale poeng: 0");
-      if (!location.hash) location.hash = "#/";
-      showView("home");
-      handleRoute();
+      const cred = await signUp(email, password, username);
+      if (cred) afterAuthSuccess();
       errEl.textContent = "";
-
-      // Default back to sign-in tab for next time
-      $("signInForm").style.display="block"; $("signUpForm").style.display="none";
     } catch (e2) {
-      if (e2?.code === "auth/email-already-in-use") {
-        errEl.textContent = "Brukernavnet er allerede i bruk.";
-      } else {
-        errEl.textContent = e2?.message || "Klarte ikke å opprette bruker.";
-      }
+      if (e2?.code === "auth/email-already-in-use") errEl.textContent = "Brukernavnet er allerede i bruk.";
+      else errEl.textContent = e2?.message || "Klarte ikke å opprette bruker.";
     }
   });
 
-  /* ----- Sign in (username + password) ----- */
+  // Sign in
   $("btnSignIn")?.addEventListener("click", async (e) => {
     e?.preventDefault?.();
     const raw = ($("signinUsername")?.value || "").trim();
@@ -251,20 +272,14 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       const email = synthEmailFromUsername(username);
       await signInWithEmailAndPassword(auth, email, password);
-
-      // Mark session start and flip to main immediately
-      markJustLoggedIn();
-      setText("scoreLine", "Totale poeng: 0");
-      if (!location.hash) location.hash = "#/";
-      showView("home");
-      handleRoute();
+      afterAuthSuccess();
       errEl.textContent = "";
     } catch {
       errEl.textContent = "Feil brukernavn eller passord.";
     }
   });
 
-  /* ----- Logout ----- */
+  // Logout
   $("btnLogout")?.addEventListener("click", async (e) => {
     e?.preventDefault?.();
     try {
@@ -278,26 +293,21 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* ----- Auth state + 24h policy ----- */
+  // Auth state + 24h policy
   onAuthStateChanged(auth, async (user) => {
     const btn = $("btnLogout");
     if (btn) btn.style.display = user ? "inline-block" : "none";
 
     if (user) {
-      // If first appearance and no local timestamp, set it
-      if (!localStorage.getItem("advent_last_login_ts")) {
-        markJustLoggedIn();
-      }
-
+      if (!localStorage.getItem("advent_last_login_ts")) markJustLoggedIn();
       if (needsReauth(user)) {
         await signOut(auth);
         showView("login");
         $("signInForm").style.display="block"; $("signUpForm").style.display="none";
         return;
       }
-
-      // Signed in and fresh → render current route
       showView("home");
+      renderHomeGrid();      // <— ensure grid is built on auth re-hydrate
       handleRoute();
     } else {
       showView("login");
@@ -305,8 +315,46 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  /* ----- Router wiring at startup ----- */
+  // Router wiring
   window.addEventListener("hashchange", handleRoute);
   if (!location.hash) location.hash = "#/";
+  // Initial draw (unauth will show login; auth rehydrate will call renderHomeGrid)
   handleRoute();
 });
+
+/* ---------- helpers that need Firebase ---------- */
+async function signUp(email, password, username) {
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  const user = cred.user;
+  await updateProfile(user, { displayName: username });
+
+  const unameRef = doc(db, "usernames", username);
+  const userRef = doc(db, "users", user.uid);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(unameRef);
+    if (snap.exists() && snap.data().uid !== user.uid) {
+      throw new Error("Brukernavnet er tatt. Velg et annet.");
+    }
+    tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
+    tx.set(userRef, {
+      uid: user.uid,
+      username,
+      totalPoints: 0,
+      public: true,
+      createdAt: serverTimestamp(),
+      lastSeenAt: serverTimestamp()
+    }, { merge: true });
+  });
+  return cred;
+}
+
+function afterAuthSuccess() {
+  markJustLoggedIn();
+  setText("scoreLine", "Totale poeng: 0");
+  if (!location.hash) location.hash = "#/";
+  showView("home");
+  renderHomeGrid();   // <— grid right away
+  handleRoute();
+}
+
