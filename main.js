@@ -44,14 +44,15 @@ const firebaseConfig = {
   measurementId: "G-J5RF50Q048"
 };
 
-/* ---------- Small helpers ---------- */
+/* ---------- Globals / helpers ---------- */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const showView = (id) => {
-  document.querySelectorAll(".view").forEach(v => { v.style.display = "none"; v.classList.remove("is-active"); });
+  // Use the same view system as app.js
+  document.querySelectorAll(".view").forEach(v => v.classList.remove('active'));
   const el = $(id);
-  if (el) { el.style.display = "block"; el.classList.add("is-active"); }
+  if (el) el.classList.add('active');
 };
 const normalizeUsername = (u) => (u || "").trim().toLowerCase();
 const isUsernameValid = (u) => /^[a-zA-Z0-9_-]{3,20}$/.test(u);
@@ -66,134 +67,73 @@ const needsReauth = (user) => {
   return (Date.now() - local) > DAY_MS;
 };
 
-/* ---------- SIMPLE CONTENT LAYER (placeholders so you can see it working) ---------- */
-// If you have real tasks elsewhere (e.g., tasks.js), you can swap this out.
-const TASKS = Array.from({ length: 24 }, (_, i) => {
-  const d = i + 1;
-  return {
-    title: `Dag ${d}`,
-    body: `Oppgave for dag ${d}. (Dette er en placeholder-tekst. Bytt ut med ekte innhold.)`,
-    hint: `Hint for dag ${d} (valgfritt).`,
-  };
-});
-
-/* Build the 24 day tiles into #grid */
-function renderHomeGrid() {
-  const grid = $("grid");
-  if (!grid) return;
-
-  // If an external grid renderer exists (from your old app.js), use that instead
-  if (typeof window.renderGrid === "function") {
-    window.renderGrid(); // your own implementation
-    return;
-  }
-
-  grid.innerHTML = ""; // clear
-  for (let day = 1; day <= 24; day++) {
-    const a = document.createElement("a");
-    a.href = `#/day/${day}`;
-    a.className = "door";
-    a.setAttribute("aria-label", `Åpne dag ${day}`);
-    a.innerHTML = `
-      <div class="door-inner">
-        <div class="door-num">${day}</div>
-        <div class="door-status">Åpen</div>
-      </div>`;
-    grid.appendChild(a);
-  }
-}
-
-/* Fill the Task view for a given day */
-function loadTask(day) {
-  const t = TASKS[day - 1] || { title: `Dag ${day}`, body: "Ingen oppgave definert enda.", hint: "" };
-
-  setText("taskTitle", t.title);
-  const body = $("taskBody");
-  if (body) body.innerHTML = `<p>${t.body}</p>`;
-
-  // Optional media
-  const media = $("taskMedia");
-  if (media) media.innerHTML = "";
-
-  // Hint UI
-  const hintCard = $("hintCard");
-  const hintBtn = $("hintBtn");
-  const hintText = $("hintText");
-  if (t.hint && hintCard && hintBtn && hintText) {
-    hintCard.style.display = "block";
-    hintText.style.display = "none";
-    hintBtn.onclick = () => {
-      hintText.textContent = t.hint;
-      hintText.style.display = "block";
-      // Your scoring: halve points here if you want
-    };
-  } else if (hintCard) {
-    hintCard.style.display = "none";
-  }
-
-  // Answer area (leave your check logic in another module if you have it)
-  setText("answerStatus", "Skriv inn svaret og trykk Sjekk (eller trykk Enter).");
-
-  // Prev/Next links
-  const prev = $("prevLink");
-  const next = $("nextLink");
-  if (prev) prev.href = day > 1 ? `#/day/${day - 1}` : "#/";
-  if (next) next.href = day < 24 ? `#/day/${day + 1}` : "#/";
-}
-
 /* ---------- Router ---------- */
-function handleRoute() {
-  const hash = location.hash || "#/";
-
-  if (hash.startsWith("#/leaderboard")) {
-    showView("leaderboard");
-    loadLeaderboard().catch(console.error);
-    return;
-  }
-
-  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
-  if (m) {
-    const day = parseInt(m[1], 10);
-    if (day >= 1 && day <= 24) {
-      loadTask(day);
-      showView("task");
-      return;
-    }
-  }
-
-  if (hash === "#/" || hash === "") {
-    showView("home");
-    renderHomeGrid(); // <— make sure grid is built when home shows
-    return;
-  }
-
-  // Fallback -> home
-  showView("home");
-  renderHomeGrid();
-}
+// Router functionality moved to app.js to avoid conflicts
 
 /* ---------- Leaderboard ---------- */
 async function loadLeaderboard() {
   const list = $("leaderboardList");
   if (!list) return;
   list.innerHTML = "";
-  const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
-  const snap = await getDocs(q);
-  let rank = 1;
-  snap.forEach(docSnap => {
-    const u = docSnap.data();
-    if (u.public !== false) {
-      const li = document.createElement("li");
-      const name = u.username || "(ukjent)";
-      const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
-      li.textContent = `${rank}. ${name} — ${pts} poeng`;
-      list.appendChild(li);
-      rank++;
+  
+  const auth = window.firebaseAuth;
+  const db = window.firebaseDb;
+  
+  if (!auth || !db) {
+    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Firebase ikke initialisert ennå</p>';
+    return;
+  }
+  
+  try {
+    const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
+    const snap = await getDocs(q);
+    let rank = 1;
+    
+    snap.forEach(docSnap => {
+      const u = docSnap.data();
+      if (u.public !== false) {
+        const li = document.createElement("li");
+        li.className = "leaderboard-item";
+        
+        // Check if this is the current user
+        if (window.firebaseUser && u.uid === window.firebaseUser.uid) {
+          li.classList.add("current-user");
+        }
+        
+        const name = u.username || "(ukjent)";
+        const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
+        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+        
+        li.innerHTML = `
+          <div class="rank">${medal} ${rank}</div>
+          <div class="user-info">
+            <div class="nickname">${name}</div>
+            <div class="user-id">ID: ${u.uid ? u.uid.substring(0, 8) + '...' : 'N/A'}</div>
+          </div>
+          <div class="stats">
+            <div class="points">${pts} p</div>
+            <div class="completed">Firebase</div>
+          </div>
+        `;
+        
+        list.appendChild(li);
+        rank++;
+      }
+    });
+    
+    if (rank === 1) {
+      list.innerHTML = '<p style="text-align: center; color: var(--muted);">Ingen spillere ennå!</p>';
     }
-  });
+  } catch (error) {
+    console.error('Failed to load leaderboard:', error);
+    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Feil ved lasting av leaderboard</p>';
+  }
 }
 
-/* ---------- Points helper (exported) ---------- */
+// Make loadLeaderboard globally accessible for app.js
+window.loadLeaderboard = loadLeaderboard;
+
+/* ---------- Public helper for scoring ---------- */
 export async function addPointsForUser(points) {
   const user = auth.currentUser;
   if (!user) throw new Error("Ikke logget inn.");
@@ -213,32 +153,106 @@ export async function addPointsForUser(points) {
   }
 }
 
-/* ---------- Firebase instances ---------- */
+// Make addPointsForUser globally accessible for app.js
+window.addPointsForUser = addPointsForUser;
+
+// Function to update total points in Firebase
+async function updateTotalPoints(totalPoints) {
+  const auth = window.firebaseAuth;
+  const db = window.firebaseDb;
+  
+  if (!auth || !db) {
+    console.error('Firebase not initialized yet');
+    return;
+  }
+  
+  const user = auth.currentUser;
+  if (!user) {
+    console.error('No Firebase user found');
+    return;
+  }
+  
+  const ref = doc(db, "users", user.uid);
+  
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      
+      // If user document doesn't exist, create it
+      if (!snap.exists()) {
+        console.log('Creating new user document in Firebase');
+        tx.set(ref, {
+          uid: user.uid,
+          username: user.displayName || 'Unknown',
+          totalPoints: totalPoints,
+          public: true,
+          createdAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp()
+        });
+      } else {
+        // Update existing user
+        tx.set(ref, { 
+          totalPoints: totalPoints, 
+          lastSeenAt: serverTimestamp() 
+        }, { merge: true });
+      }
+    });
+    
+    console.log('Successfully updated Firebase with total points:', totalPoints);
+  } catch (error) {
+    console.error('Failed to update Firebase points:', error);
+    throw error;
+  }
+}
+
+// Make updateTotalPoints globally accessible for app.js
+window.updateTotalPoints = updateTotalPoints;
+
+/* ---------- Firebase instances (created after DOM ready) ---------- */
 let app, auth, db;
 
-/* ---------- Init after DOM is ready ---------- */
+// Initialize global Firebase user variable
+window.firebaseUser = null;
+
+// Make Firebase instances globally accessible
+window.firebaseAuth = null;
+window.firebaseDb = null;
+
+/* ---------- Init on DOM ready ---------- */
 window.addEventListener("DOMContentLoaded", () => {
-  // Make sure decorative overlays never block clicks
-  const snow = $("snow"); if (snow) snow.style.pointerEvents = "none";
+  // Ensure overlays never block clicks (just in case CSS didn't load yet)
+  const snow = $("snow");
+  if (snow) snow.style.pointerEvents = "none";
 
   // Init Firebase
   app = initializeApp(firebaseConfig);
-  // Optional App Check
-  // initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"), isTokenAutoRefreshEnabled: true });
+
+  // (Optional) App Check
+  // initializeAppCheck(app, {
+  //   provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
+  //   isTokenAutoRefreshEnabled: true,
+  // });
 
   auth = getAuth(app);
   db = getFirestore(app);
+  
+  // Make Firebase instances globally accessible
+  window.firebaseAuth = auth;
+  window.firebaseDb = db;
 
-  // Persist login on this device
+  // Persistence without top-level await
   setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-  // Tabs (login/signup)
-  $("tabSignIn")?.addEventListener("click", (e) => { e?.preventDefault?.(); $("signInForm").style.display="block"; $("signUpForm").style.display="none"; });
-  $("tabSignUp")?.addEventListener("click", (e) => { e?.preventDefault?.(); $("signInForm").style.display="none"; $("signUpForm").style.display="block"; });
+  // Tabs
+  $("tabSignIn")?.addEventListener("click", () => {
+    $("signInForm").style.display="block"; $("signUpForm").style.display="none";
+  });
+  $("tabSignUp")?.addEventListener("click", () => {
+    $("signInForm").style.display="none"; $("signUpForm").style.display="block";
+  });
 
   // Sign up
-  $("btnSignUp")?.addEventListener("click", async (e) => {
-    e?.preventDefault?.();
+  $("btnSignUp")?.addEventListener("click", async () => {
     const raw = $("signupUsername")?.value || "";
     const password = $("signupPassword")?.value || "";
     const errEl = $("signupError");
@@ -249,18 +263,48 @@ window.addEventListener("DOMContentLoaded", () => {
 
     try {
       const email = synthEmailFromUsername(username);
-      const cred = await signUp(email, password, username);
-      if (cred) afterAuthSuccess();
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const user = cred.user;
+
+      await updateProfile(user, { displayName: username });
+
+      const unameRef = doc(db, "usernames", username);
+      const userRef = doc(db, "users", user.uid);
+
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(unameRef);
+        if (snap.exists() && snap.data().uid !== user.uid) {
+          throw new Error("Brukernavnet er tatt. Velg et annet.");
+        }
+        tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
+        tx.set(userRef, {
+          uid: user.uid,
+          username,
+          totalPoints: 0,
+          public: true,
+          createdAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp()
+        }, { merge: true });
+      });
+
+      markJustLoggedIn();
+      setText("scoreLine", "Totale poeng: 0");
+      if (!location.hash) location.hash = "#/";
+      if (window.route) window.route();
       errEl.textContent = "";
-    } catch (e2) {
-      if (e2?.code === "auth/email-already-in-use") errEl.textContent = "Brukernavnet er allerede i bruk.";
-      else errEl.textContent = e2?.message || "Klarte ikke å opprette bruker.";
+      // Switch default tab back to sign-in for next visit
+      $("signInForm").style.display="block"; $("signUpForm").style.display="none";
+    } catch (e) {
+      if (e?.code === "auth/email-already-in-use") {
+        errEl.textContent = "Brukernavnet er allerede i bruk.";
+      } else {
+        errEl.textContent = e?.message || "Klarte ikke å opprette bruker.";
+      }
     }
   });
 
   // Sign in
-  $("btnSignIn")?.addEventListener("click", async (e) => {
-    e?.preventDefault?.();
+  $("btnSignIn")?.addEventListener("click", async () => {
     const raw = ($("signinUsername")?.value || "").trim();
     const password = $("signinPassword")?.value || "";
     const errEl = $("loginError");
@@ -272,7 +316,10 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       const email = synthEmailFromUsername(username);
       await signInWithEmailAndPassword(auth, email, password);
-      afterAuthSuccess();
+      markJustLoggedIn();
+      setText("scoreLine", "Totale poeng: 0");
+      if (!location.hash) location.hash = "#/";
+      if (window.route) window.route();
       errEl.textContent = "";
     } catch {
       errEl.textContent = "Feil brukernavn eller passord.";
@@ -280,81 +327,41 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // Logout
-  $("btnLogout")?.addEventListener("click", async (e) => {
-    e?.preventDefault?.();
+  $("btnLogout")?.addEventListener("click", async () => {
     try {
       await signOut(auth);
       setText("scoreLine", "Totale poeng: 0");
       showView("login");
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
       location.hash = "#/";
-    } catch (err) {
-      console.error("Logout feilet:", err);
+    } catch (e) {
+      console.error("Logout feilet:", e);
     }
   });
 
-  // Auth state + 24h policy
+  // Auth state + 24h rule
   onAuthStateChanged(auth, async (user) => {
     const btn = $("btnLogout");
     if (btn) btn.style.display = user ? "inline-block" : "none";
 
+    // Set global Firebase user for app.js
+    window.firebaseUser = user;
+
     if (user) {
-      if (!localStorage.getItem("advent_last_login_ts")) markJustLoggedIn();
       if (needsReauth(user)) {
         await signOut(auth);
         showView("login");
         $("signInForm").style.display="block"; $("signUpForm").style.display="none";
         return;
       }
-      showView("home");
-      renderHomeGrid();      // <— ensure grid is built on auth re-hydrate
-      handleRoute();
+      // Let app.js handle routing
+      if (window.route) window.route();
     } else {
       showView("login");
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
     }
   });
 
-  // Router wiring
-  window.addEventListener("hashchange", handleRoute);
+  // Router wiring handled by app.js
   if (!location.hash) location.hash = "#/";
-  // Initial draw (unauth will show login; auth rehydrate will call renderHomeGrid)
-  handleRoute();
 });
-
-/* ---------- helpers that need Firebase ---------- */
-async function signUp(email, password, username) {
-  const cred = await createUserWithEmailAndPassword(auth, email, password);
-  const user = cred.user;
-  await updateProfile(user, { displayName: username });
-
-  const unameRef = doc(db, "usernames", username);
-  const userRef = doc(db, "users", user.uid);
-
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(unameRef);
-    if (snap.exists() && snap.data().uid !== user.uid) {
-      throw new Error("Brukernavnet er tatt. Velg et annet.");
-    }
-    tx.set(unameRef, { uid: user.uid, createdAt: serverTimestamp() }, { merge: true });
-    tx.set(userRef, {
-      uid: user.uid,
-      username,
-      totalPoints: 0,
-      public: true,
-      createdAt: serverTimestamp(),
-      lastSeenAt: serverTimestamp()
-    }, { merge: true });
-  });
-  return cred;
-}
-
-function afterAuthSuccess() {
-  markJustLoggedIn();
-  setText("scoreLine", "Totale poeng: 0");
-  if (!location.hash) location.hash = "#/";
-  showView("home");
-  renderHomeGrid();   // <— grid right away
-  handleRoute();
-}
-
