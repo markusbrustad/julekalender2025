@@ -52,15 +52,15 @@ const firebaseConfig = {
 //  isTokenAutoRefreshEnabled: true,
 //});
 
-/* ---------- Globals / helpers ---------- */
+/* ---------- Small helpers ---------- */
 const DAY_MS = 24 * 60 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const showView = (id) => {
-  // Use the same view system as app.js
-  document.querySelectorAll(".view").forEach(v => v.classList.remove('active'));
+  // Hard hide all, then show target (prevents hidden views covering the page)
+  document.querySelectorAll(".view").forEach(v => { v.style.display = "none"; v.classList.remove("is-active"); });
   const el = $(id);
-  if (el) el.classList.add('active');
+  if (el) { el.style.display = "block"; el.classList.add("is-active"); }
 };
 const normalizeUsername = (u) => (u || "").trim().toLowerCase();
 const isUsernameValid = (u) => /^[a-zA-Z0-9_-]{3,20}$/.test(u);
@@ -76,72 +76,58 @@ const needsReauth = (user) => {
 };
 
 /* ---------- Router ---------- */
-// Router functionality moved to app.js to avoid conflicts
+function handleRoute() {
+  const hash = location.hash || "#/";
+
+  if (hash.startsWith("#/leaderboard")) {
+    showView("leaderboard");
+    loadLeaderboard().catch(console.error);
+    return;
+  }
+
+  const m = hash.match(/^#\/(?:day|task)\/(\d{1,2})$/);
+  if (m) {
+    const day = parseInt(m[1], 10);
+    if (day >= 1 && day <= 24) {
+      const title = $("taskTitle");
+      if (title) title.textContent = `Dag ${day}`;
+      // TODO: loadTask(day) if you have per-day content to render
+      showView("task");
+      return;
+    }
+  }
+
+  if (hash === "#/" || hash === "") {
+    showView("home");
+    return;
+  }
+
+  // Fallback to home (not login)
+  showView("home");
+}
 
 /* ---------- Leaderboard ---------- */
 async function loadLeaderboard() {
   const list = $("leaderboardList");
   if (!list) return;
   list.innerHTML = "";
-  
-  const auth = window.firebaseAuth;
-  const db = window.firebaseDb;
-  
-  if (!auth || !db) {
-    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Firebase ikke initialisert ennå</p>';
-    return;
-  }
-  
-  try {
-    const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
-    const snap = await getDocs(q);
-    let rank = 1;
-    
-    snap.forEach(docSnap => {
-      const u = docSnap.data();
-      if (u.public !== false) {
-        const li = document.createElement("li");
-        li.className = "leaderboard-item";
-        
-        // Check if this is the current user
-        if (window.firebaseUser && u.uid === window.firebaseUser.uid) {
-          li.classList.add("current-user");
-        }
-        
-        const name = u.username || "(ukjent)";
-        const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
-        const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
-        
-        li.innerHTML = `
-          <div class="rank">${medal} ${rank}</div>
-          <div class="user-info">
-            <div class="nickname">${name}</div>
-            <div class="user-id">ID: ${u.uid ? u.uid.substring(0, 8) + '...' : 'N/A'}</div>
-          </div>
-          <div class="stats">
-            <div class="points">${pts} p</div>
-            <div class="completed">Firebase</div>
-          </div>
-        `;
-        
-        list.appendChild(li);
-        rank++;
-      }
-    });
-    
-    if (rank === 1) {
-      list.innerHTML = '<p style="text-align: center; color: var(--muted);">Ingen spillere ennå!</p>';
+  const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(50));
+  const snap = await getDocs(q);
+  let rank = 1;
+  snap.forEach(docSnap => {
+    const u = docSnap.data();
+    if (u.public !== false) {
+      const li = document.createElement("li");
+      const name = u.username || "(ukjent)";
+      const pts = Number.isFinite(u.totalPoints) ? u.totalPoints : 0;
+      li.textContent = `${rank}. ${name} — ${pts} poeng`;
+      list.appendChild(li);
+      rank++;
     }
-  } catch (error) {
-    console.error('Failed to load leaderboard:', error);
-    list.innerHTML = '<p style="text-align: center; color: var(--warn);">Feil ved lasting av leaderboard</p>';
-  }
+  });
 }
 
-// Make loadLeaderboard globally accessible for app.js
-window.loadLeaderboard = loadLeaderboard;
-
-/* ---------- Public helper for scoring ---------- */
+/* ---------- Points helper ---------- */
 export async function addPointsForUser(points) {
   const user = auth.currentUser;
   if (!user) throw new Error("Ikke logget inn.");
@@ -161,81 +147,19 @@ export async function addPointsForUser(points) {
   }
 }
 
-// Make addPointsForUser globally accessible for app.js
-window.addPointsForUser = addPointsForUser;
-
-// Function to update total points in Firebase
-async function updateTotalPoints(totalPoints) {
-  const auth = window.firebaseAuth;
-  const db = window.firebaseDb;
-  
-  if (!auth || !db) {
-    console.error('Firebase not initialized yet');
-    return;
-  }
-  
-  const user = auth.currentUser;
-  if (!user) {
-    console.error('No Firebase user found');
-    return;
-  }
-  
-  const ref = doc(db, "users", user.uid);
-  
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      
-      // If user document doesn't exist, create it
-      if (!snap.exists()) {
-        console.log('Creating new user document in Firebase');
-        tx.set(ref, {
-          uid: user.uid,
-          username: user.displayName || 'Unknown',
-          totalPoints: totalPoints,
-          public: true,
-          createdAt: serverTimestamp(),
-          lastSeenAt: serverTimestamp()
-        });
-      } else {
-        // Update existing user
-        tx.set(ref, { 
-          totalPoints: totalPoints, 
-          lastSeenAt: serverTimestamp() 
-        }, { merge: true });
-      }
-    });
-    
-    console.log('Successfully updated Firebase with total points:', totalPoints);
-  } catch (error) {
-    console.error('Failed to update Firebase points:', error);
-    throw error;
-  }
-}
-
-// Make updateTotalPoints globally accessible for app.js
-window.updateTotalPoints = updateTotalPoints;
-
-/* ---------- Firebase instances (created after DOM ready) ---------- */
+/* ---------- Firebase instances ---------- */
 let app, auth, db;
 
-// Initialize global Firebase user variable
-window.firebaseUser = null;
-
-// Make Firebase instances globally accessible
-window.firebaseAuth = null;
-window.firebaseDb = null;
-
-/* ---------- Init on DOM ready ---------- */
+/* ---------- Init after DOM is ready ---------- */
 window.addEventListener("DOMContentLoaded", () => {
-  // Ensure overlays never block clicks (just in case CSS didn't load yet)
+  // Defensive: make sure decorative overlays never block clicks
   const snow = $("snow");
   if (snow) snow.style.pointerEvents = "none";
 
   // Init Firebase
   app = initializeApp(firebaseConfig);
 
-  // (Optional) App Check
+  // Optional App Check (uncomment if enabled in Console)
   // initializeAppCheck(app, {
   //   provider: new ReCaptchaEnterpriseProvider("YOUR_RECAPTCHA_ENTERPRISE_SITE_KEY"),
   //   isTokenAutoRefreshEnabled: true,
@@ -243,24 +167,23 @@ window.addEventListener("DOMContentLoaded", () => {
 
   auth = getAuth(app);
   db = getFirestore(app);
-  
-  // Make Firebase instances globally accessible
-  window.firebaseAuth = auth;
-  window.firebaseDb = db;
 
-  // Persistence without top-level await
+  // Persist login on this device (no top-level await)
   setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-  // Tabs
-  $("tabSignIn")?.addEventListener("click", () => {
+  /* ----- Tabs (Logg inn / Registrer) ----- */
+  $("tabSignIn")?.addEventListener("click", (e) => {
+    e?.preventDefault?.();
     $("signInForm").style.display="block"; $("signUpForm").style.display="none";
   });
-  $("tabSignUp")?.addEventListener("click", () => {
+  $("tabSignUp")?.addEventListener("click", (e) => {
+    e?.preventDefault?.();
     $("signInForm").style.display="none"; $("signUpForm").style.display="block";
   });
 
-  // Sign up
-  $("btnSignUp")?.addEventListener("click", async () => {
+  /* ----- Sign up (username + password, no email) ----- */
+  $("btnSignUp")?.addEventListener("click", async (e) => {
+    e?.preventDefault?.();
     const raw = $("signupUsername")?.value || "";
     const password = $("signupPassword")?.value || "";
     const errEl = $("signupError");
@@ -295,24 +218,28 @@ window.addEventListener("DOMContentLoaded", () => {
         }, { merge: true });
       });
 
+      // Mark session start and flip to main immediately
       markJustLoggedIn();
       setText("scoreLine", "Totale poeng: 0");
       if (!location.hash) location.hash = "#/";
-      if (window.route) window.route();
+      showView("home");
+      handleRoute();
       errEl.textContent = "";
-      // Switch default tab back to sign-in for next visit
+
+      // Default back to sign-in tab for next time
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
-    } catch (e) {
-      if (e?.code === "auth/email-already-in-use") {
+    } catch (e2) {
+      if (e2?.code === "auth/email-already-in-use") {
         errEl.textContent = "Brukernavnet er allerede i bruk.";
       } else {
-        errEl.textContent = e?.message || "Klarte ikke å opprette bruker.";
+        errEl.textContent = e2?.message || "Klarte ikke å opprette bruker.";
       }
     }
   });
 
-  // Sign in
-  $("btnSignIn")?.addEventListener("click", async () => {
+  /* ----- Sign in (username + password) ----- */
+  $("btnSignIn")?.addEventListener("click", async (e) => {
+    e?.preventDefault?.();
     const raw = ($("signinUsername")?.value || "").trim();
     const password = $("signinPassword")?.value || "";
     const errEl = $("loginError");
@@ -324,53 +251,62 @@ window.addEventListener("DOMContentLoaded", () => {
     try {
       const email = synthEmailFromUsername(username);
       await signInWithEmailAndPassword(auth, email, password);
+
+      // Mark session start and flip to main immediately
       markJustLoggedIn();
       setText("scoreLine", "Totale poeng: 0");
       if (!location.hash) location.hash = "#/";
-      if (window.route) window.route();
+      showView("home");
+      handleRoute();
       errEl.textContent = "";
     } catch {
       errEl.textContent = "Feil brukernavn eller passord.";
     }
   });
 
-  // Logout
-  $("btnLogout")?.addEventListener("click", async () => {
+  /* ----- Logout ----- */
+  $("btnLogout")?.addEventListener("click", async (e) => {
+    e?.preventDefault?.();
     try {
       await signOut(auth);
       setText("scoreLine", "Totale poeng: 0");
       showView("login");
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
       location.hash = "#/";
-    } catch (e) {
-      console.error("Logout feilet:", e);
+    } catch (err) {
+      console.error("Logout feilet:", err);
     }
   });
 
-  // Auth state + 24h rule
+  /* ----- Auth state + 24h policy ----- */
   onAuthStateChanged(auth, async (user) => {
     const btn = $("btnLogout");
     if (btn) btn.style.display = user ? "inline-block" : "none";
 
-    // Set global Firebase user for app.js
-    window.firebaseUser = user;
-
     if (user) {
+      // If first appearance and no local timestamp, set it
+      if (!localStorage.getItem("advent_last_login_ts")) {
+        markJustLoggedIn();
+      }
+
       if (needsReauth(user)) {
         await signOut(auth);
         showView("login");
         $("signInForm").style.display="block"; $("signUpForm").style.display="none";
         return;
       }
-      // Let app.js handle routing
-      if (window.route) window.route();
+
+      // Signed in and fresh → render current route
+      showView("home");
+      handleRoute();
     } else {
       showView("login");
       $("signInForm").style.display="block"; $("signUpForm").style.display="none";
     }
   });
 
-  // Router wiring handled by app.js
+  /* ----- Router wiring at startup ----- */
+  window.addEventListener("hashchange", handleRoute);
   if (!location.hash) location.hash = "#/";
+  handleRoute();
 });
-
